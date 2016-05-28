@@ -135,7 +135,8 @@ int tcp_server_accept(void)
         struct socket *accept_sock;
         struct inet_connection_sock *isock; 
         int len = 49;
-        unsigned char buf[len+1];
+        unsigned char in_buf[len+1];
+        unsigned char out_buf[len+1];
 
         DECLARE_WAITQUEUE(wait, current);
 
@@ -199,10 +200,11 @@ int tcp_server_accept(void)
                        goto bad_exit;
                }
 
-               memset(&buf, 0, len+1);
+               memset(in_buf, 0, len+1);
                pr_info("receive the package\n");
 
-               while((ret = tcp_server_receive(accept_sock, buf, len, MSG_DONTWAIT)))
+               while((ret = tcp_server_receive(accept_sock, in_buf, len,\
+                                               MSG_DONTWAIT)))
                {
                        /*
                        if(kthread_should_stop())
@@ -217,10 +219,10 @@ int tcp_server_accept(void)
                        if(ret == 0)
                                continue;
 
-                       memset(&buf, 0, len+1);
-                       strcat(buf, "kernel server: hi");
+                       memset(out_buf, 0, len+1);
+                       strcat(out_buf, "kernel server: hi");
                        pr_info("sending the package\n");
-                       tcp_server_send(accept_sock, buf, strlen(buf),\
+                       tcp_server_send(accept_sock, out_buf, strlen(out_buf),\
                                        MSG_DONTWAIT);
                }
 
