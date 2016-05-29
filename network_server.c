@@ -129,6 +129,7 @@ read_again:
         {
                 pr_info(" *** mtp | tcp server handle connection thread "
                         "stopped | tcp_server_receive *** \n");
+                //tcp_conn_handler->thread[id] = NULL;
                 tcp_conn_handler->tcp_conn_handler_stopped[id]= 1;
                 //sock_release(sock);
                 do_exit(0);
@@ -153,7 +154,7 @@ int connection_handler(void *data)
        struct socket *accept_socket = conn_data->accept_socket;
        int id = conn_data->thread_id;
 
-       int ret; 
+       //int ret; 
        int len = 49;
        unsigned char in_buf[len+1];
        unsigned char out_buf[len+1];
@@ -161,8 +162,10 @@ int connection_handler(void *data)
        memset(in_buf, 0, len+1);
        pr_info("receive the package\n");
 
-       while((ret = tcp_server_receive(accept_socket, id, in_buf, len,\
-                                       MSG_DONTWAIT)))
+       //while((ret = tcp_server_receive(accept_socket, id, in_buf, len,
+       //                                MSG_DONTWAIT)))
+       while(tcp_server_receive(accept_socket, id, in_buf, len,\
+                                       MSG_DONTWAIT))
        {
                //if(kthread_should_stop())
                //{
@@ -171,8 +174,8 @@ int connection_handler(void *data)
                //        tcp_acceptor_stopped = 1;
                //        do_exit(0);
                //}
-               if(ret == 0)
-                       continue;
+               //if(ret == 0)
+               //        continue;
 
                memset(out_buf, 0, len+1);
                strcat(out_buf, "kernel server: hi");
@@ -209,7 +212,7 @@ int tcp_server_accept(void)
         socket = tcp_server->listen_socket;
         pr_info(" *** mtp | creating the accept socket | tcp_server_accept "
                 "*** \n");
-        accept_sock = (struct socket*)kmalloc(sizeof(struct socket), GFP_KERNEL);
+        //accept_sock = (struct socket*)kmalloc(sizeof(struct socket), GFP_KERNEL);
         
         err =  sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &accept_sock);
         if(err < 0)
@@ -221,27 +224,25 @@ int tcp_server_accept(void)
 
         isock = inet_csk(socket->sk);
 
-        while(tcp_server->running == 1)
+        while(1)
         {
                struct tcp_conn_handler_data *data = NULL;
                 
-               if(reqsk_queue_empty(&isock->icsk_accept_queue))
+               add_wait_queue(&socket->sk->sk_wq->wait, &wait);
+               while(reqsk_queue_empty(&isock->icsk_accept_queue))
                {
-                       add_wait_queue(&socket->sk->sk_wq->wait, &wait);
-                       //__set_current_state(TASK_INTERRUPTIBLE);
-                       set_current_state(TASK_INTERRUPTIBLE);
+                       __set_current_state(TASK_INTERRUPTIBLE);
+                       //set_current_state(TASK_INTERRUPTIBLE);
 
                        //change this HZ to about 5 mins in jiffies
                        schedule_timeout(HZ);
 
-                        pr_info("icsk queue empty ? %s \n",
-                        reqsk_queue_empty(&isock->icsk_accept_queue)?"yes":"no");
+                        //pr_info("icsk queue empty ? %s \n",
+                        //reqsk_queue_empty(&isock->icsk_accept_queue)?"yes":"no");
 
-                        pr_info("recv queue empty ? %s \n",
-                skb_queue_empty(&socket->sk->sk_receive_queue)?"yes":"no");
+                        //pr_info("recv queue empty ? %s \n",
+                //skb_queue_empty(&socket->sk->sk_receive_queue)?"yes":"no");
 
-                        __set_current_state(TASK_RUNNING);
-                        remove_wait_queue(&socket->sk->sk_wq->wait, &wait);
 
                         if(kthread_should_stop())
                         {
@@ -249,12 +250,16 @@ int tcp_server_accept(void)
                                         "stopped | tcp_server_accept *** \n");
                                 tcp_acceptor_stopped = 1;
                                 sock_release(accept_sock);
-                                kfree(accept_sock);
+                                //kfree(accept_sock);
                                 do_exit(0);
                         }
 
-                        continue;
+                        if(signal_pending(current))
+                                goto bad_exit;
+
                } 
+                __set_current_state(TASK_RUNNING);
+                remove_wait_queue(&socket->sk->sk_wq->wait, &wait);
 
                pr_info("accept connection\n");
                ret = socket->ops->accept(socket, accept_sock, O_NONBLOCK);
@@ -318,8 +323,14 @@ int tcp_server_accept(void)
                        tcp_acceptor_stopped = 1;
                        kfree(data);
                        sock_release(accept_sock);
-                       kfree(accept_sock);
+                       //kfree(accept_sock);
                        do_exit(0);
+               }
+                        
+               if(signal_pending(current))
+               {
+                       kfree(data);
+                       goto bad_exit;
                }
         }
 
@@ -328,7 +339,7 @@ int tcp_server_accept(void)
 
 bad_exit:
        sock_release(accept_sock);
-       kfree(accept_sock);
+       //kfree(accept_sock);
        tcp_acceptor_stopped = 1;
        return -1;
 }
@@ -343,6 +354,7 @@ int tcp_server_listen(void)
 
         spin_lock(&tcp_server_lock);
         tcp_server->running = 1;
+        allow_signal(SIGKILL|SIGTERM);         
         spin_unlock(&tcp_server_lock);
 
         ret = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP,\
@@ -394,8 +406,12 @@ int tcp_server_listen(void)
                         pr_info(" *** mtp | tcp server listening thread"
                                 " stopped | tcp_server_listen *** \n");
                         tcp_listener_stopped = 1;
+                        //sock_release(conn_socket);
                         do_exit(0);
                 }
+
+                if(signal_pending(current))
+                        goto err;
         }
         //}
 
