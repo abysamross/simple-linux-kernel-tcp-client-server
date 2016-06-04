@@ -41,4 +41,5 @@
 *.old
 *.original
 *.log
-*.mod
+*.mod.c
+*.txt

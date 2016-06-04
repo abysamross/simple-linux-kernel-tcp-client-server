@@ -34,7 +34,7 @@ u32 create_address(u8 *ip)
         return addr;
 }
 
-int send_sync_buf(struct socket *sock, const char *buf, const size_t length,\
+int tcp_client_send(struct socket *sock, const char *buf, const size_t length,\
                 unsigned long flags)
 {
         struct msghdr msg;
@@ -76,12 +76,15 @@ repeat_send:
         return written ? written:len;
 }
 
+/*
 void tcp_client_send(struct socket *sock, char *str)
 {
         send_sync_buf(sock, str, strlen(str), MSG_DONTWAIT);
 }
+*/
 
-int tcp_client_receive(struct socket *sock, char *str)
+int tcp_client_receive(struct socket *sock, char *str,\
+                        unsigned long flags)
 {
         //mm_segment_t oldmm;
         struct msghdr msg;
@@ -96,7 +99,7 @@ int tcp_client_receive(struct socket *sock, char *str)
         //msg.msg_iovlen  = 1;
         msg.msg_control = NULL;
         msg.msg_controllen = 0;
-        msg.msg_flags   = 0;
+        msg.msg_flags   = flags;
 
         //msg.msg_iov->iov_base   = str;
         //msg.msg_ioc->iov_len    = max_size; 
@@ -107,12 +110,17 @@ int tcp_client_receive(struct socket *sock, char *str)
 
 read_again:
         //len = sock_recvmsg(sock, &msg, max_size, 0); 
-        len = kernel_recvmsg(sock, &msg, &vec, max_size, max_size, 0);
+        len = kernel_recvmsg(sock, &msg, &vec, max_size, max_size, flags);
 
-        if(len == -EAGAIN || len == -ERESTARTSYS)
+        //if(len == -EAGAIN || len == -ERESTARTSYS)
+        if(len == -EAGAIN) 
                 goto read_again;
 
-        pr_info(" *** mtp | the server says: %s | tcp_client_receive *** \n",str);
+        if(len == -ERESTARTSYS)
+                pr_info(" *** mtp | error while reading: %d | "
+                        "tcp_client_receive *** \n", len);
+
+        pr_info(" *** mtp | the server says: %s | tcp_client_receive *** \n", str);
         //set_fs(oldmm);
         return len;
 }
@@ -154,10 +162,10 @@ int tcp_client_connect(void)
         }
 
         memset(&reply, 0, len+1);
-        strcat(reply, "client says: OK"); 
-        tcp_client_send(conn_socket, reply);
+        strcat(reply, "HOLA"); 
+        tcp_client_send(conn_socket, reply, strlen(reply), MSG_DONTWAIT);
         memset(&response, 0, len+1);
-        tcp_client_receive(conn_socket, response);
+        tcp_client_receive(conn_socket, response, MSG_DONTWAIT);
 err:
         return -1;
 }
@@ -171,6 +179,18 @@ static int __init network_client_init(void)
 
 static void __exit network_client_exit(void)
 {
+        int len = 49;
+        char response[len+1];
+        char reply[len+1];
+
+        memset(&reply, 0, len+1);
+        strcat(reply, "ADIOS"); 
+        //tcp_client_send(conn_socket, reply);
+        tcp_client_send(conn_socket, reply, strlen(reply), MSG_DONTWAIT);
+        memset(&response, 0, len+1);
+        //tcp_client_receive(conn_socket, response);
+        tcp_client_receive(conn_socket, response, MSG_DONTWAIT);
+
         if(conn_socket != NULL)
         {
                 sock_release(conn_socket);
