@@ -19,7 +19,7 @@ The client and server are built as loadable kernel modules.
     * change the ip and port number to that of your server.
     * again, this too will soon be changed to module parameters.
 8. make 
-9. sudo insmo  network_client.ko
+9. sudo insmod  network_client.ko
 
 **Status:**
 
