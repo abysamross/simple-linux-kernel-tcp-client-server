@@ -6,8 +6,6 @@ This is an attempt to build a tcp server, entirely in kernel space, that support
 The client and server are built as loadable kernel modules.
 
 **To try this out:**
--------------------
-
 1. clone this repo to server machine.
 2. open network_server.c 
     * change the port number of your server.
@@ -23,11 +21,9 @@ The client and server are built as loadable kernel modules.
 9. sudo insmo  network_client.ko
 
 **Status:**
------------
 Work still in progress.
 
 **Note:**
---------
 Take care not to remove the server before the client(s) have been removed.
 The server will be removed fine enough, but afterwards when you try to 
 remove the client, you will run into trouble. This is because the client is
