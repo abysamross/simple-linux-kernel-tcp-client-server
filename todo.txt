@@ -1,0 +1,26 @@
+/** Done **/
+struct socket *accept_socket
+
+Issue a call to sock_create(&accept_socket)
+every time when looking for a new connection.
+
+That means bring the sock_create() with the 
+while(1) loop.
+
+This is necessary as, on exploring code of 
+accept sys call (accept4) in net/socket.c,
+it was found that the syscall isuues a call 
+to sock_alloc(), which returns a new socket
+every time.
+/** Done **/
+
+Add a wait queue for connection handler
+thread, add it to accept_socket->sk->sk_wq->wait queue.
+The condition which waits on should be, 
+!skb_queue_empty(accept_socket->sk->sk_receive_queue),
+i.e. something (msg) should be received in the 
+sk_receive_queue of the sock struct associated with the 
+accept_socket socket for this connection.
+
+
+
