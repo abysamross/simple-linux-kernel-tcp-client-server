@@ -5,11 +5,11 @@ This is an attempt to build a tcp server, entirely in kernel space, that support
 
 The client and server are built as loadable kernel modules.
 
-To try this out:
+## To try this out:
 ----------------
 
-(1) clone this repo to server machine.
-(2) open network_server.c 
+(1) clone this repo to server machine.\\
+(2) open network_server.c\\ 
     change the port number of your server.
     sorry, this will soon be changed to module parameter.
 (3) make
@@ -22,11 +22,11 @@ To try this out:
 (7) make 
 (8) sudo insmo  network_client.ko
 
-status:
+## Status:
 -------
 Work still in progress.
 
-Note:
+## Note:
 -----
 Take care not to remove the server before the client(s) have been removed.
 The server will be removed fine enough, but afterwards when you try to 
