@@ -149,6 +149,7 @@ int tcp_server_receive(struct socket *sock, int id,struct sockaddr_in *address,\
 
 read_again:
 
+        /*
         if(kthread_should_stop())
         {
                 pr_info(" *** mtp | tcp server handle connection thread "
@@ -158,6 +159,7 @@ read_again:
                 //sock_release(sock);
                 do_exit(0);
         }
+        */
 
         if(!skb_queue_empty(&sock->sk->sk_receive_queue))
                 pr_info("recv queue empty ? %s \n",
@@ -191,6 +193,9 @@ int connection_handler(void *data)
        unsigned char in_buf[len+1];
        unsigned char out_buf[len+1];
 
+       DECLARE_WAITQUEUE(recv_wait, current);
+       allow_signal(SIGKILL|SIGSTOP);
+
 
        //while((ret = tcp_server_receive(accept_socket, id, in_buf, len,
        //                                MSG_DONTWAIT)))
@@ -206,12 +211,46 @@ int connection_handler(void *data)
                //        do_exit(0);
                //}
                //if(ret == 0)
+              add_wait_queue(&accept_socket->sk->sk_wq->wait, &recv_wait);  
+
+              while(skb_queue_empty(&accept_socket->sk->sk_receive_queue))
+              {
+                      __set_current_state(TASK_INTERRUPTIBLE);
+                      schedule_timeout(HZ);
+
+                      if(kthread_should_stop())
+                      {
+                              pr_info(" *** mtp | tcp server handle connection "
+                                "thread stopped | connection_handler *** \n");
+
+                              //tcp_conn_handler->thread[id] = NULL;
+                              tcp_conn_handler->tcp_conn_handler_stopped[id]= 1;
+
+                              __set_current_state(TASK_RUNNING);
+                              remove_wait_queue(&accept_socket->sk->sk_wq->wait,\
+                                              &recv_wait);
+                              //sock_release(sock);
+                              do_exit(0);
+                      }
+
+                      if(signal_pending(current))
+                      {
+                              __set_current_state(TASK_RUNNING);
+                              remove_wait_queue(&accept_socket->sk->sk_wq->wait,\
+                                              &recv_wait);
+                              goto out;
+                      }
+              }
+              __set_current_state(TASK_RUNNING);
+              remove_wait_queue(&accept_socket->sk->sk_wq->wait, &recv_wait);
+
+
+              pr_info("receiving message\n");
               memset(in_buf, 0, len+1);
               ret = tcp_server_receive(accept_socket, id, address, in_buf, len,\
                                        MSG_DONTWAIT);
               if(ret > 0)
               {
-                      pr_info("receiving message\n");
                       if(memcmp(in_buf, "HOLA", 4) == 0)
                       {
                               memset(out_buf, 0, len+1);
@@ -233,6 +272,7 @@ int connection_handler(void *data)
               }
        }
 
+out:
        tcp_conn_handler->tcp_conn_handler_stopped[id]= 1;
        return 0;
 }
@@ -249,7 +289,7 @@ int tcp_server_accept(void)
         //unsigned char in_buf[len+1];
         //unsigned char out_buf[len+1];
 
-        DECLARE_WAITQUEUE(wait, current);
+        DECLARE_WAITQUEUE(accept_wait, current);
 
         //spin_lock(&tcp_server_lock);
         //tcp_server->running = 1;
@@ -297,7 +337,7 @@ int tcp_server_accept(void)
                //char *tmp;
                //int addr_len;
                 
-               add_wait_queue(&socket->sk->sk_wq->wait, &wait);
+               add_wait_queue(&socket->sk->sk_wq->wait, &accept_wait);
                while(reqsk_queue_empty(&isock->icsk_accept_queue))
                {
                        __set_current_state(TASK_INTERRUPTIBLE);
@@ -316,17 +356,25 @@ int tcp_server_accept(void)
                                pr_info(" *** mtp | tcp server acceptor thread "
                                        "stopped | tcp_server_accept *** \n");
                                tcp_acceptor_stopped = 1;
+                               __set_current_state(TASK_RUNNING);
+                               remove_wait_queue(&socket->sk->sk_wq->wait,\
+                                               &accept_wait);
                                sock_release(accept_socket);
                                //kfree(accept_socket);
                                do_exit(0);
                        }
 
                        if(signal_pending(current))
+                       {
+                               __set_current_state(TASK_RUNNING);
+                               remove_wait_queue(&socket->sk->sk_wq->wait,\
+                                               &accept_wait);
                                goto release;
+                       }
 
                } 
                __set_current_state(TASK_RUNNING);
-               remove_wait_queue(&socket->sk->sk_wq->wait, &wait);
+               remove_wait_queue(&socket->sk->sk_wq->wait, &accept_wait);
 
                pr_info("accept connection\n");
 
