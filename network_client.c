@@ -112,13 +112,14 @@ read_again:
         //len = sock_recvmsg(sock, &msg, max_size, 0); 
         len = kernel_recvmsg(sock, &msg, &vec, max_size, max_size, flags);
 
-        //if(len == -EAGAIN || len == -ERESTARTSYS)
-        if(len == -EAGAIN) 
-                goto read_again;
-
-        if(len == -ERESTARTSYS)
+        if(len == -EAGAIN || len == -ERESTARTSYS)
+        {
                 pr_info(" *** mtp | error while reading: %d | "
                         "tcp_client_receive *** \n", len);
+
+                goto read_again;
+        }
+
 
         pr_info(" *** mtp | the server says: %s | tcp_client_receive *** \n", str);
         //set_fs(oldmm);
@@ -136,8 +137,10 @@ int tcp_client_connect(void)
         int len = 49;
         char response[len+1];
         char reply[len+1];
-        
         int ret = -1;
+
+        //DECLARE_WAITQUEUE(recv_wait, current);
+        DECLARE_WAIT_QUEUE_HEAD(recv_wait);
         
         ret = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &conn_socket);
         if(ret < 0)
@@ -164,8 +167,27 @@ int tcp_client_connect(void)
         memset(&reply, 0, len+1);
         strcat(reply, "HOLA"); 
         tcp_client_send(conn_socket, reply, strlen(reply), MSG_DONTWAIT);
-        memset(&response, 0, len+1);
-        tcp_client_receive(conn_socket, response, MSG_DONTWAIT);
+
+        wait_event_timeout(recv_wait,\
+                        !skb_queue_empty(&conn_socket->sk->sk_receive_queue),\
+                                                                        10*HZ);
+        //add_wait_queue(&conn_socket->sk->sk_wq->wait, &recv_wait);
+        //while(1)
+        //{
+                //__set_current_status(TASK_INTERRUPTIBLE);
+                //schedule_timeout(HZ);
+                if(!skb_queue_empty(&conn_socket->sk->sk_receive_queue))
+                {
+                        //__set_current_status(TASK_RUNNING);
+                        //remove_wait_queue(&conn_socket->sk->sk_wq->wait,
+                        //                                      &recv_wait);
+                        memset(&response, 0, len+1);
+                        tcp_client_receive(conn_socket, response, MSG_DONTWAIT);
+                        //break;
+                }
+
+        //}
+
 err:
         return -1;
 }
@@ -183,13 +205,29 @@ static void __exit network_client_exit(void)
         char response[len+1];
         char reply[len+1];
 
+        //DECLARE_WAITQUEUE(exit_wait, current);
+        DECLARE_WAIT_QUEUE_HEAD(exit_wait);
+
         memset(&reply, 0, len+1);
         strcat(reply, "ADIOS"); 
         //tcp_client_send(conn_socket, reply);
         tcp_client_send(conn_socket, reply, strlen(reply), MSG_DONTWAIT);
-        memset(&response, 0, len+1);
-        //tcp_client_receive(conn_socket, response);
-        tcp_client_receive(conn_socket, response, MSG_DONTWAIT);
+
+        //while(1)
+        //{
+                //tcp_client_receive(conn_socket, response);
+                //add_wait_queue(&conn_socket->sk->sk_wq->wait, &exit_wait)
+         wait_event_timeout(exit_wait,\
+                         !skb_queue_empty(&conn_socket->sk->sk_receive_queue),\
+                                                                        5*HZ);
+        if(!skb_queue_empty(&conn_socket->sk->sk_receive_queue))
+        {
+                memset(&response, 0, len+1);
+                tcp_client_receive(conn_socket, response, MSG_DONTWAIT);
+                //remove_wait_queue(&conn_socket->sk->sk_wq->wait, &exit_wait);
+        }
+
+        //}
 
         if(conn_socket != NULL)
         {
