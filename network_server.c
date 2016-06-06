@@ -20,20 +20,14 @@
 #include <net/request_sock.h>
 
 #define DEFAULT_PORT 2325
-//#define CONNECT_PORT 23
 #define MODULE_NAME "tmem_tcp_server"
 #define MAX_CONNS 16
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Aby Sam Ross");
 
-//static atomic_t recv_count;
-//static atomic_t send_count;
-
 static int tcp_listener_stopped = 0;
 static int tcp_acceptor_stopped = 0;
-//static int tcp_conn_handler_stopped = 0;
-//static struct task_struct *thread_id[MAX_CONNS];
 
 DEFINE_SPINLOCK(tcp_server_lock);
 
@@ -192,25 +186,31 @@ int connection_handler(void *data)
        int len = 49;
        unsigned char in_buf[len+1];
        unsigned char out_buf[len+1];
+       //char *tmp;
 
        DECLARE_WAITQUEUE(recv_wait, current);
        allow_signal(SIGKILL|SIGSTOP);
 
 
-       //while((ret = tcp_server_receive(accept_socket, id, in_buf, len,
-       //                                MSG_DONTWAIT)))
-       //while(tcp_server_receive(accept_socket, id, in_buf, len,
-       //                                MSG_DONTWAIT))
+       /*
+       while((ret = tcp_server_receive(accept_socket, id, in_buf, len,\
+                                       MSG_DONTWAIT)))
+       while(tcp_server_receive(accept_socket, id, in_buf, len,\
+                                       MSG_DONTWAIT))
+       */
        while(1)
        {
-               //if(kthread_should_stop())
-               //{
-               //        pr_info(" *** mtp | tcp server acceptor thread "
-               //                "stopped | tcp_server_accept *** \n");
-               //        tcp_acceptor_stopped = 1;
-               //        do_exit(0);
-               //}
-               //if(ret == 0)
+               /*
+               if(kthread_should_stop())
+               {
+                       pr_info(" *** mtp | tcp server acceptor thread "
+                               "stopped | tcp_server_accept *** \n");
+                       tcp_acceptor_stopped = 1;
+                       do_exit(0);
+               }
+               if(ret == 0)
+               */
+
               add_wait_queue(&accept_socket->sk->sk_wq->wait, &recv_wait);  
 
               while(skb_queue_empty(&accept_socket->sk->sk_receive_queue))
@@ -229,8 +229,15 @@ int connection_handler(void *data)
                               __set_current_state(TASK_RUNNING);
                               remove_wait_queue(&accept_socket->sk->sk_wq->wait,\
                                               &recv_wait);
-                              //sock_release(sock);
+                              kfree(tcp_conn_handler->data[id]->address);
+                              kfree(tcp_conn_handler->data[id]);
+                        sock_release(tcp_conn_handler->data[id]->accept_socket);
+                              /*
+                              tcp_conn_handler->thread[id] = NULL;
+                              sock_release(sock);
                               do_exit(0);
+                              */
+                              return 0;
                       }
 
                       if(signal_pending(current))
@@ -238,6 +245,11 @@ int connection_handler(void *data)
                               __set_current_state(TASK_RUNNING);
                               remove_wait_queue(&accept_socket->sk->sk_wq->wait,\
                                               &recv_wait);
+                              /*
+                              kfree(tcp_conn_handler->data[id]->address);
+                              kfree(tcp_conn_handler->data[id]);
+                              sock_release(tcp_conn_handler->data[id]->accept_socket);
+                              */
                               goto out;
                       }
               }
@@ -259,7 +271,12 @@ int connection_handler(void *data)
                               tcp_server_send(accept_socket, id, out_buf,\
                                               strlen(out_buf), MSG_DONTWAIT);
                       }
-
+                      /*
+                      tmp = inet_ntoa(&(address->sin_addr));
+                      pr_info("connection handler: %d of: %s %d done sending "
+                              " HOLASI\n", id, tmp, ntohs(address->sin_port));
+                      kfree(tmp);
+                      */
                       if(memcmp(in_buf, "ADIOS", 5) == 0)
                       {
                               memset(out_buf, 0, len+1);
@@ -273,8 +290,22 @@ int connection_handler(void *data)
        }
 
 out:
+       /* 
+       tmp = inet_ntoa(&(address->sin_addr));
+
+       pr_info("connection handler: %d of: %s %d exiting normally\n",
+                       id, tmp, ntohs(address->sin_port));
+       kfree(tmp);
+       */
        tcp_conn_handler->tcp_conn_handler_stopped[id]= 1;
-       return 0;
+       kfree(tcp_conn_handler->data[id]->address);
+       kfree(tcp_conn_handler->data[id]);
+       sock_release(tcp_conn_handler->data[id]->accept_socket);
+       //spin_lock(&tcp_server_lock);
+       tcp_conn_handler->thread[id] = NULL;
+       //spin_unlock(&tcp_server_lock);
+       //return 0;
+       do_exit(0);
 }
 
 int tcp_server_accept(void)
@@ -284,26 +315,28 @@ int tcp_server_accept(void)
         struct socket *accept_socket = NULL;
         struct inet_connection_sock *isock; 
         int id = 0;
-
-        //int len = 49;
-        //unsigned char in_buf[len+1];
-        //unsigned char out_buf[len+1];
-
+        /*
+        int len = 49;
+        unsigned char in_buf[len+1];
+        unsigned char out_buf[len+1];
+        */
         DECLARE_WAITQUEUE(accept_wait, current);
-
-        //spin_lock(&tcp_server_lock);
-        //tcp_server->running = 1;
-        //current->flags |= PF_NOFREEZE;
+        /*
+        spin_lock(&tcp_server_lock);
+        tcp_server->running = 1;
+        current->flags |= PF_NOFREEZE;
+        */
         allow_signal(SIGKILL|SIGSTOP);
         //spin_unlock(&tcp_server_lock);
 
         socket = tcp_server->listen_socket;
         pr_info(" *** mtp | creating the accept socket | tcp_server_accept "
                 "*** \n");
+        /*
+        accept_socket = 
+        (struct socket*)kmalloc(sizeof(struct socket), GFP_KERNEL);
+        */
 
-        //accept_socket = 
-        //(struct socket*)kmalloc(sizeof(struct socket), GFP_KERNEL);
-        
         while(1)
         {
                 struct tcp_conn_handler_data *data = NULL;
@@ -314,8 +347,10 @@ int tcp_server_accept(void)
                 accept_err =  
                         sock_create(socket->sk->sk_family, socket->type,\
                                     socket->sk->sk_protocol, &accept_socket);
-                        //sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP,
-                        //&accept_socket);
+                        /*
+                        sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP,\
+                                        &accept_socket);
+                        */
 
                 if(accept_err < 0 || !accept_socket)
                 {
@@ -332,10 +367,12 @@ int tcp_server_accept(void)
 
         //while(1)
         //{
-               //struct tcp_conn_handler_data *data = NULL;
-               //struct sockaddr_in *client = NULL;
-               //char *tmp;
-               //int addr_len;
+               /*
+               struct tcp_conn_handler_data *data = NULL;
+               struct sockaddr_in *client = NULL;
+               char *tmp;
+               int addr_len;
+               */
                 
                add_wait_queue(&socket->sk->sk_wq->wait, &accept_wait);
                while(reqsk_queue_empty(&isock->icsk_accept_queue))
@@ -360,8 +397,8 @@ int tcp_server_accept(void)
                                remove_wait_queue(&socket->sk->sk_wq->wait,\
                                                &accept_wait);
                                sock_release(accept_socket);
-                               //kfree(accept_socket);
-                               do_exit(0);
+                               //do_exit(0);
+                               return 0;
                        }
 
                        if(signal_pending(current))
@@ -415,23 +452,26 @@ int tcp_server_accept(void)
 
                kfree(tmp);
 
-               //memset(in_buf, 0, len+1);
-               //pr_info("receive the package\n");
+               /*
+               memset(in_buf, 0, len+1);
+               pr_info("receive the package\n");
+               */
                pr_info("handle connection\n");
 
                /*
-               while((accept_err = tcp_server_receive(accept_socket, in_buf, len,\
-                                               MSG_DONTWAIT)))
-               {
-                       //if(kthread_should_stop())
-                       //{
-                       //        pr_info(" *** mtp | tcp server acceptor thread "
-                       //                "stopped | tcp_server_accept *** \n");
-                       //        tcp_acceptor_stopped = 1;
-                       //        do_exit(0);
-                       //}
-                       
-
+               while((accept_err = tcp_server_receive(accept_socket, in_buf,\
+                                               len, MSG_DONTWAIT)))
+               {*/
+                       /* not needed here
+                       if(kthread_should_stop())
+                       {
+                               pr_info(" *** mtp | tcp server acceptor thread "
+                                       "stopped | tcp_server_accept *** \n");
+                               tcp_acceptor_stopped = 1;
+                               do_exit(0);
+                       }
+                       */
+                /*
                        if(accept_err == 0)
                                continue;
 
@@ -442,11 +482,17 @@ int tcp_server_accept(void)
                                        MSG_DONTWAIT);
                }
                */
+
+               /*should I protect this against concurrent access?*/
                for(id = 0; id < MAX_CONNS; id++)
                {
+                        //spin_lock(&tcp_server_lock);
                         if(tcp_conn_handler->thread[id] == NULL)
                                 break;
+                        //spin_unlock(&tcp_server_lock);
                }
+
+               pr_info("gave free id: %d\n", id);
 
                if(id == MAX_CONNS)
                        goto release;
@@ -458,6 +504,7 @@ int tcp_server_accept(void)
                data->accept_socket = accept_socket;
                data->thread_id = id;
 
+               tcp_conn_handler->tcp_conn_handler_stopped[id] = 0;
                tcp_conn_handler->data[id] = data;
                tcp_conn_handler->thread[id] = 
                kthread_run((void *)connection_handler, (void *)data, MODULE_NAME);
@@ -467,39 +514,42 @@ int tcp_server_accept(void)
                        pr_info(" *** mtp | tcp server acceptor thread stopped"
                                " | tcp_server_accept *** \n");
                        tcp_acceptor_stopped = 1;
-                       //kfree(data->address);
-                       //kfree(data);
+                       /*
                        kfree(tcp_conn_handler->data[id]->address);
                        kfree(tcp_conn_handler->data[id]);
                        sock_release(tcp_conn_handler->data[id]->accept_socket);
-                       //kfree(accept_socket);
+                       kfree(accept_socket);
                        do_exit(0);
+                       */
+                       return 0;
                }
                         
                if(signal_pending(current))
                {
-                       //kfree(data->address);
-                       //kfree(data);
+                       /*
                        kfree(tcp_conn_handler->data[id]->address);
                        kfree(tcp_conn_handler->data[id]);
-                       goto release;
+                       goto err;
+                       */
+                       break;
                }
+        //}
         }
 
+        /*
         kfree(tcp_conn_handler->data[id]->address);
         kfree(tcp_conn_handler->data[id]);
-        //sock_release(accept_socket);
         sock_release(tcp_conn_handler->data[id]->accept_socket);
+        */
         tcp_acceptor_stopped = 1;
-        return 0;
-
+        //return 0;
+        do_exit(0);
 release: 
-       //sock_release(accept_socket);
-       sock_release(tcp_conn_handler->data[id]->accept_socket);
+       sock_release(accept_socket);
 err:
-       //kfree(accept_socket);
        tcp_acceptor_stopped = 1;
-       return -1;
+       //return -1;
+       do_exit(0);
 }
 
 int tcp_server_listen(void)
@@ -566,9 +616,12 @@ int tcp_server_listen(void)
                 {
                         pr_info(" *** mtp | tcp server listening thread"
                                 " stopped | tcp_server_listen *** \n");
-                        //tcp_listener_stopped = 1;
-                        //sock_release(conn_socket);
+                        /*
+                        tcp_listener_stopped = 1;
+                        sock_release(conn_socket);
                         do_exit(0);
+                        */
+                        return 0;
                 }
 
                 if(signal_pending(current))
@@ -578,13 +631,14 @@ int tcp_server_listen(void)
 
         sock_release(conn_socket);
         tcp_listener_stopped = 1;
-        return 0;
-
+        //return 0;
+        do_exit(0);
 release:
         sock_release(conn_socket);
 err:
         tcp_listener_stopped = 1;
-        return -1;
+        //return -1;
+        do_exit(0);
 }
 
 int tcp_server_start(void)
@@ -629,14 +683,13 @@ static void __exit network_server_exit(void)
                                         ret = 
                                 kthread_stop(tcp_conn_handler->thread[id]);
 
-                                if(!ret)
-                                        pr_info(" *** mtp | tcp server "
+                                        if(!ret)
+                                                pr_info(" *** mtp | tcp server "
                                                 "connection handler thread: %d "
                                                 "stopped | network_server_exit "
                                                 "*** \n", id);
                                 }
                        }
-
                 }
 
                 if(!tcp_acceptor_stopped)
@@ -670,7 +723,5 @@ static void __exit network_server_exit(void)
         pr_info(" *** mtp | network server module unloaded | "
                 "network_server_exit *** \n");
 }
-
 module_init(network_server_init)
 module_exit(network_server_exit)
-

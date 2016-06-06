@@ -8,15 +8,13 @@
 #include <linux/in.h>
 #include <asm/uaccess.h>
 #include <linux/socket.h>
-//#include <linux/smp_lock.h>
 #include <linux/slab.h>
 
-//#include "ktb.h"
-//#include "bloom_filter.h"
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Aby Sam Ross");
+
 #define PORT 2325
-//#define EPH_PORT 2000
+
 struct socket *conn_socket = NULL;
 
 u32 create_address(u8 *ip)
@@ -45,18 +43,20 @@ int tcp_client_send(struct socket *sock, const char *buf, const size_t length,\
 
         msg.msg_name    = 0;
         msg.msg_namelen = 0;
-        //msg.msg_iov     = &iov;
-        //msg.msg_iovlen  = 1;
+        /*
+        msg.msg_iov     = &iov;
+        msg.msg_iovlen  = 1;
+        */
         msg.msg_control = NULL;
         msg.msg_controllen = 0;
         msg.msg_flags   = flags;
 
-        //not clear if I should use  get_fs and set_fs
         oldmm = get_fs(); set_fs(KERNEL_DS);
-
 repeat_send:
-        //msg.msg_iov->iov_len  = left;
-        //msg.msg_iov->iov_base = (char *)buf + written; 
+        /*
+        msg.msg_iov->iov_len  = left;
+        msg.msg_iov->iov_base = (char *)buf + written; 
+        */
         vec.iov_len = left;
         vec.iov_base = (char *)buf + written;
 
@@ -76,13 +76,6 @@ repeat_send:
         return written ? written:len;
 }
 
-/*
-void tcp_client_send(struct socket *sock, char *str)
-{
-        send_sync_buf(sock, str, strlen(str), MSG_DONTWAIT);
-}
-*/
-
 int tcp_client_receive(struct socket *sock, char *str,\
                         unsigned long flags)
 {
@@ -95,19 +88,21 @@ int tcp_client_receive(struct socket *sock, char *str,\
 
         msg.msg_name    = 0;
         msg.msg_namelen = 0;
-        //msg.msg_iov     = &iov;
-        //msg.msg_iovlen  = 1;
+        /*
+        msg.msg_iov     = &iov;
+        msg.msg_iovlen  = 1;
+        */
         msg.msg_control = NULL;
         msg.msg_controllen = 0;
         msg.msg_flags   = flags;
-
-        //msg.msg_iov->iov_base   = str;
-        //msg.msg_ioc->iov_len    = max_size; 
+        /*
+        msg.msg_iov->iov_base   = str;
+        msg.msg_ioc->iov_len    = max_size; 
+        */
         vec.iov_len = max_size;
         vec.iov_base = str;
 
         //oldmm = get_fs(); set_fs(KERNEL_DS);
-
 read_again:
         //len = sock_recvmsg(sock, &msg, max_size, 0); 
         len = kernel_recvmsg(sock, &msg, &vec, max_size, max_size, flags);
@@ -129,11 +124,15 @@ read_again:
 int tcp_client_connect(void)
 {
         struct sockaddr_in saddr;
-        //struct sockaddr_in daddr;
-        //struct socket *data_socket = NULL;
+        /*
+        struct sockaddr_in daddr;
+        struct socket *data_socket = NULL;
+        */
         unsigned char destip[5] = {10,129,41,200,'\0'};
-        //char *response = kmalloc(4096, GFP_KERNEL);
-        //char *reply = kmalloc(4096, GFP_KERNEL);
+        /*
+        char *response = kmalloc(4096, GFP_KERNEL);
+        char *reply = kmalloc(4096, GFP_KERNEL);
+        */
         int len = 49;
         char response[len+1];
         char reply[len+1];
@@ -170,23 +169,29 @@ int tcp_client_connect(void)
 
         wait_event_timeout(recv_wait,\
                         !skb_queue_empty(&conn_socket->sk->sk_receive_queue),\
-                                                                        10*HZ);
-        //add_wait_queue(&conn_socket->sk->sk_wq->wait, &recv_wait);
-        //while(1)
-        //{
-                //__set_current_status(TASK_INTERRUPTIBLE);
-                //schedule_timeout(HZ);
+                                                                        5*HZ);
+        /*
+        add_wait_queue(&conn_socket->sk->sk_wq->wait, &recv_wait);
+        while(1)
+        {
+                __set_current_status(TASK_INTERRUPTIBLE);
+                schedule_timeout(HZ);
+        */
                 if(!skb_queue_empty(&conn_socket->sk->sk_receive_queue))
                 {
-                        //__set_current_status(TASK_RUNNING);
-                        //remove_wait_queue(&conn_socket->sk->sk_wq->wait,
-                        //                                      &recv_wait);
+                        /*
+                        __set_current_status(TASK_RUNNING);
+                        remove_wait_queue(&conn_socket->sk->sk_wq->wait,\
+                                                              &recv_wait);
+                        */
                         memset(&response, 0, len+1);
                         tcp_client_receive(conn_socket, response, MSG_DONTWAIT);
                         //break;
                 }
 
-        //}
+        /*
+        }
+        */
 
 err:
         return -1;
@@ -215,8 +220,10 @@ static void __exit network_client_exit(void)
 
         //while(1)
         //{
-                //tcp_client_receive(conn_socket, response);
-                //add_wait_queue(&conn_socket->sk->sk_wq->wait, &exit_wait)
+                /*
+                tcp_client_receive(conn_socket, response);
+                add_wait_queue(&conn_socket->sk->sk_wq->wait, &exit_wait)
+                */
          wait_event_timeout(exit_wait,\
                          !skb_queue_empty(&conn_socket->sk->sk_receive_queue),\
                                                                         5*HZ);
