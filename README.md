@@ -23,12 +23,4 @@ The client and server are built as loadable kernel modules.
 
 **Status:**
 
-Work still in progress.
-
-**Note:**
-
-Take care not to remove the server before the client(s) have been removed.
-The server will be removed fine enough, but afterwards when you try to 
-remove the client, you will run into trouble. This is because the client is
-still waiting to hear, a response to its good bye, from a non-existant server. 
-This will be rectified soon.
+Work almost done.
