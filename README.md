@@ -1,5 +1,6 @@
 # simple-linux-kernel-tcp-client-server
-A simple in-kernel tcp client and server implemented as LKMs
+A simple in-kernel tcp client and server implemented as LKMs (linux kernel
+version 4.1.3)
 
 This is an attempt to build a tcp server, entirely in kernel space, that supports mulitple tcp clients. The tcp client is also entirely in kernel space.
 
