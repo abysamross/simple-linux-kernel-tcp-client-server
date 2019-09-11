@@ -25,3 +25,10 @@ The client and server are built as loadable kernel modules.
 **Status:**
 
 Work almost done.
+
+### Branch clean-up
+
+Creating clean-up with the aim of cleaning up code, compiling with Kernel 5.2.13 and address other issues.
+
+
+
