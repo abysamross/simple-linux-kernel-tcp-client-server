@@ -3,3 +3,5 @@
 
 obj-m := network_client.o
 #obj-m := network_server.o
+
+ccflags-y := -I$(src)/include
