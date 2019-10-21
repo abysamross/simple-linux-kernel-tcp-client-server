@@ -11,10 +11,8 @@
 #include <linux/slab.h>
 #include <linux/utsname.h>
 
-#include "include/network_common.h"
+#include "network_common.h"
 
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Aby Sam Ross");
 
 struct socket *conn_socket = NULL;
 
@@ -133,7 +131,14 @@ int tcp_client_connect(void)
     int ret = -1;
 
     DECLARE_WAIT_QUEUE_HEAD(recv_wait);
-    
+
+    /*
+     * Invoking 
+     *
+     * sock_create() --> __sock_create()
+     *
+     * from source/net/socket.c
+     */
     ret = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &conn_socket);
 
     if (ret) {
@@ -147,6 +152,18 @@ int tcp_client_connect(void)
     saddr.sin_port = htons(PORT);
     saddr.sin_addr.s_addr = htonl(create_address(destip));
 
+    /*
+     * Invoking
+     *
+     * inet_stream_connect() --> __inet_stream_connect() -->
+     *
+     * from source/net/ipv4/af_net.c
+     *
+     * socket->sock->sock_common.skc_prot->tcp_v4_connect()
+     *
+     * from source/net/ipv4/tcp_ipv4.c
+     *
+     */
     ret = conn_socket->ops->connect(conn_socket, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in), O_RDWR);
 
     if (ret && (ret != -EINPROGRESS)) {
@@ -221,3 +238,8 @@ static void __exit network_client_exit(void)
 
 module_init(network_client_init)
 module_exit(network_client_exit)
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Aby Sam Ross");
+MODULE_DESCRIPTION("A Simple in-Kernel TCP Client");
+MODULE_VERSION("1:1.0-5.2.13");
